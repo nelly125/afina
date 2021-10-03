@@ -29,6 +29,8 @@ public:
         _lru_head.reset(); // TODO: Here is stack overflow
     }
 
+    SimpleLRU(SimpleLRU&&) = default;
+
     std::size_t get_size ();
 
 
