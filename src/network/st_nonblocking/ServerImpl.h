@@ -3,7 +3,9 @@
 
 #include <thread>
 #include <vector>
+#include <set>
 
+#include "Connection.h"
 #include <afina/network/Server.h>
 
 namespace spdlog {
@@ -53,6 +55,8 @@ private:
 
     // Curstom event "device" used to wakeup workers
     int _event_fd;
+
+    std::set<Connection *> _connections;
 
     // IO thread
     std::thread _work_thread;
