@@ -131,7 +131,7 @@ void Connection::DoRead() {
 void Connection::DoWrite() {
     _logger->debug("DoWrite {} socket", _socket);
 
-    std::cout << "I am writing" << std::endl;
+//    std::cout << "I am writing" << std::endl;
 
     auto it = _outgoing.begin();
     int n = 0;
