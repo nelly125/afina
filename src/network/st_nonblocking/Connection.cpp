@@ -36,10 +36,9 @@ void Connection::OnClose() {
 
 // See Connection.h
 void Connection::DoRead() {
-    std::cout << "DoRead" << std::endl;
     try {
         int readed_bytes = -1;
-        while ((readed_bytes = read(_socket, client_buffer + offset, sizeof(client_buffer) - offset)) > 0) {
+        if ((readed_bytes = read(_socket, client_buffer + offset, sizeof(client_buffer) - offset)) > 0) {
             _logger->debug("Got {} bytes from socket", readed_bytes);
             offset += readed_bytes;
             // Single block of data readed from the socket could trigger inside actions a multiple times,
@@ -120,17 +119,23 @@ void Connection::DoRead() {
     } catch (std::runtime_error &ex) {
         _logger->error("Failed to process connection on descriptor {}: {}", _socket, ex.what());
         _outgoing.emplace_back("ERROR \r\n");
+        OnClose();
+    } catch (...) {
+        _logger->error("Failed to process connection on descriptor {}: {}", _socket);
+        _outgoing.emplace_back("ERROR \r\n");
+        OnClose();
     }
 }
 
 // See Connection.h
 void Connection::DoWrite() {
-    std::cout << "DoWrite" << std::endl;
     _logger->debug("DoWrite {} socket", _socket);
 
+    std::cout << "I am writing" << std::endl;
+
     auto it = _outgoing.begin();
-    int n;
-    do  {
+    int n = 0;
+    do {
         std::string &head = *it;
         n = write(_socket, &head[0] + offset, head.size() - offset);
         if (n > 0) {
@@ -140,20 +145,19 @@ void Connection::DoWrite() {
                 offset = 0;
             }
         }
-    } while(n > 0 && it != _outgoing.end());
+    } while (n > 0 && it != _outgoing.end());
 
     _outgoing.erase(_outgoing.begin(), it);
 
-    if (n == EWOULDBLOCK) {
+    if (n == errno) {
         _status = false;
     }
-    if (_outgoing.size() < MAX_SIZE) {
+    if (_outgoing.size() < MAX_SIZE * 0.9) {
         _event.events |= EPOLLIN;
     }
     if (_outgoing.empty()) {
         _event.events &= ~EPOLLOUT;
     }
-
 }
 
 } // namespace STnonblock
