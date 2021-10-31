@@ -95,13 +95,11 @@ void ServerImpl::Stop() {
         throw std::runtime_error("Failed to wakeup workers");
     }
 
-    for (auto c : _connections) {
-        close(c->_socket);
-        c->OnClose();
-        delete(c);
-    }
+    shutdown(_server_socket, SHUT_RDWR);
 
-    close(_server_socket);
+    for (auto pc : _connections) {
+        shutdown(pc->_socket, SHUT_RDWR);
+    }
 }
 
 // See Server.h
@@ -157,17 +155,13 @@ void ServerImpl::OnRun() {
 
             auto old_mask = pc->_event.events;
             if ((current_event.events & EPOLLERR) || (current_event.events & EPOLLHUP)) {
-                if (epoll_ctl(epoll_descr, EPOLL_CTL_DEL, pc->_socket, &pc->_event)) {
-                    _logger->error("Failed to delete connection from epoll");
-                }
-                close(pc->_socket);
                 pc->OnError();
-                current_event.events = pc->_event.events;
-                delete pc;
-                continue;
             } else if (current_event.events & EPOLLRDHUP) {
-                pc->OnClose();
                 _logger->debug("EPOLLRDHUP");
+                if (current_event.events & EPOLLOUT) {
+                    pc->DoWrite();
+                }
+                pc->OnClose();
             } else {
                 // Depends on what connection wants...
                 if (current_event.events & EPOLLIN) {
@@ -195,6 +189,7 @@ void ServerImpl::OnRun() {
                 if (epoll_ctl(epoll_descr, EPOLL_CTL_MOD, pc->_socket, &pc->_event)) {
                     _logger->error("Failed to change connection event mask");
 
+                    _connections.erase(pc);
                     close(pc->_socket);
                     pc->OnClose();
 
@@ -238,7 +233,7 @@ void ServerImpl::OnNewConnection(int epoll_descr) {
         }
 
         // Register the new FD to be monitored by epoll.
-        Connection *pc = new(std::nothrow) Connection(infd, _logger, pStorage);
+        Connection *pc = new (std::nothrow) Connection(infd, _logger, pStorage);
         if (pc == nullptr) {
             throw std::runtime_error("Failed to allocate connection");
         }

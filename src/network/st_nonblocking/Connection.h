@@ -43,9 +43,9 @@ private:
     std::deque<std::string> _outgoing;
     bool _status = false;
     static const std::size_t MAX_SIZE = 256;
-    char client_buffer[4096] = "";
-    std::size_t offset = 0;
-    std::size_t offset_write = 0;
+    char _client_buffer[4096] = "";
+    std::size_t _offset = 0;
+    std::size_t _offset_write = 0;
     Protocol::Parser parser;
     std::string argument_for_command = "";
     int _head_written_count;
