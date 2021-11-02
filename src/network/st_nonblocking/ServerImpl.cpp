@@ -32,7 +32,10 @@ namespace STnonblock {
 ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl) : Server(ps, pl) {}
 
 // See Server.h
-ServerImpl::~ServerImpl() {}
+ServerImpl::~ServerImpl() {
+    Stop();
+    Join();
+}
 
 // See Server.h
 void ServerImpl::Start(uint16_t port, uint32_t n_acceptors, uint32_t n_workers) {
@@ -91,12 +94,20 @@ void ServerImpl::Stop() {
     if (eventfd_write(_event_fd, 1)) {
         throw std::runtime_error("Failed to wakeup workers");
     }
+
+    shutdown(_server_socket, SHUT_RDWR);
+
+    for (auto pc : _connections) {
+        shutdown(pc->_socket, SHUT_RDWR);
+    }
 }
 
 // See Server.h
 void ServerImpl::Join() {
     // Wait for work to be complete
-    _work_thread.join();
+    if (_work_thread.joinable()) {
+        _work_thread.join();
+    }
 }
 
 // See ServerImpl.h
@@ -122,7 +133,7 @@ void ServerImpl::OnRun() {
     }
 
     bool run = true;
-    std::array<struct epoll_event, 64> mod_list;
+    std::array<struct epoll_event, 64> mod_list{};
     while (run) {
         int nmod = epoll_wait(epoll_descr, &mod_list[0], mod_list.size(), -1);
         _logger->debug("Acceptor wokeup: {} events", nmod);
@@ -140,19 +151,26 @@ void ServerImpl::OnRun() {
 
             // That is some connection!
             Connection *pc = static_cast<Connection *>(current_event.data.ptr);
+            _connections.insert(pc);
 
             auto old_mask = pc->_event.events;
             if ((current_event.events & EPOLLERR) || (current_event.events & EPOLLHUP)) {
                 pc->OnError();
             } else if (current_event.events & EPOLLRDHUP) {
+                _logger->debug("EPOLLRDHUP");
+                if (current_event.events & EPOLLOUT) {
+                    pc->DoWrite();
+                }
                 pc->OnClose();
             } else {
                 // Depends on what connection wants...
                 if (current_event.events & EPOLLIN) {
                     pc->DoRead();
+                    current_event.events = pc->_event.events;
                 }
                 if (current_event.events & EPOLLOUT) {
                     pc->DoWrite();
+                    current_event.events = pc->_event.events;
                 }
             }
 
@@ -162,6 +180,7 @@ void ServerImpl::OnRun() {
                     _logger->error("Failed to delete connection from epoll");
                 }
 
+                _connections.erase(pc);
                 close(pc->_socket);
                 pc->OnClose();
 
@@ -170,6 +189,7 @@ void ServerImpl::OnRun() {
                 if (epoll_ctl(epoll_descr, EPOLL_CTL_MOD, pc->_socket, &pc->_event)) {
                     _logger->error("Failed to change connection event mask");
 
+                    _connections.erase(pc);
                     close(pc->_socket);
                     pc->OnClose();
 
@@ -178,6 +198,12 @@ void ServerImpl::OnRun() {
             }
         }
     }
+    for (auto pc : _connections) {
+        close(pc->_socket);
+        pc->OnClose();
+        delete pc;
+    }
+    _connections.clear();
     _logger->warn("Acceptor stopped");
 }
 
@@ -207,7 +233,7 @@ void ServerImpl::OnNewConnection(int epoll_descr) {
         }
 
         // Register the new FD to be monitored by epoll.
-        Connection *pc = new(std::nothrow) Connection(infd);
+        Connection *pc = new (std::nothrow) Connection(infd, _logger, pStorage);
         if (pc == nullptr) {
             throw std::runtime_error("Failed to allocate connection");
         }
@@ -217,6 +243,8 @@ void ServerImpl::OnNewConnection(int epoll_descr) {
         if (pc->isAlive()) {
             if (epoll_ctl(epoll_descr, EPOLL_CTL_ADD, pc->_socket, &pc->_event)) {
                 pc->OnError();
+                close(pc->_socket);
+                _connections.erase(pc);
                 delete pc;
             }
         }
