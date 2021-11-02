@@ -14,8 +14,6 @@ namespace STnonblock {
 void Connection::Start() {
     _logger->debug("Start {} socket", _socket);
     _status = true;
-    _event.data.fd = _socket;
-    _event.data.ptr = this;
     _event.events = EPOLLIN | EPOLLRDHUP | EPOLLERR;
 }
 
@@ -110,7 +108,7 @@ void Connection::DoRead() {
 
         if (_offset == 0) {
             _logger->debug("Connection closed");
-        } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        }  else if (errno != EAGAIN && errno != EWOULDBLOCK) {
             throw std::runtime_error(std::string(strerror(errno)));
         }
     } catch (std::runtime_error &ex) {
