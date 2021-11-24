@@ -7,13 +7,86 @@
 namespace Afina {
 namespace Coroutine {
 
-void Engine::Store(context &ctx) {}
+Engine::~Engine() {
+    if (StackBottom) {
+        delete[] std::get<0>(idle_ctx->Stack);
+        delete idle_ctx;
+    }
+    while (alive) {
+        context *ctx = alive;
+        delete[] std::get<0>(alive->Stack);
+        delete ctx;
+        alive = alive->next;
+    }
+    while (blocked) {
+        context *ctx = blocked;
+        delete[] std::get<0>(blocked->Stack);
+        delete ctx;
+        blocked = blocked->next;
+    }
+}
 
-void Engine::Restore(context &ctx) {}
+void Engine::Store(context &ctx) {
+    char c;
+    if (&c <= ctx.Low) {
+        ctx.Low = &c;
+    } else {
+        ctx.Hight = &c;
+    }
+//    std::cout << "zdghdfgsd" << &c << std::endl;
 
-void Engine::yield() {}
+    std::size_t stack_size = ctx.Hight - ctx.Low;
+    if (std::get<1>(ctx.Stack) < stack_size || std::get<1>(ctx.Stack) > 2 * stack_size) {
+        delete[] std::get<0>(ctx.Stack);
+        std::get<1>(ctx.Stack) = stack_size;
+        std::get<0>(ctx.Stack) = new char[stack_size];
+    }
 
-void Engine::sched(void *routine_) {}
+    memcpy(std::get<0>(ctx.Stack), ctx.Low, stack_size);
+}
+
+void Engine::Restore(context &ctx) {
+    char addr;
+    if (&addr >= ctx.Low && &addr <= ctx.Hight) {
+        Restore(ctx);
+    }
+    std::size_t stack_size = ctx.Hight - ctx.Low;
+    memcpy(ctx.Low, std::get<0>(ctx.Stack), stack_size);
+    cur_routine = &ctx;
+    longjmp(ctx.Environment, 1);
+}
+
+void Engine::yield() {
+    if (!alive || (cur_routine == alive && !alive->next)) {
+        return;
+    }
+    context *ctx = alive;
+    if (ctx && ctx == cur_routine) {
+        ctx = ctx->next;
+    }
+    if (ctx) {
+        sched(ctx);
+    }
+}
+
+void Engine::sched(void *routine_) {
+    context *routine = static_cast<context *>(routine_);
+    if (routine_ == nullptr) {
+        yield();
+        return;
+    }
+    if (cur_routine == routine || routine->is_blocked) {
+        return;
+    }
+    if (cur_routine != idle_ctx) {
+        if (setjmp(cur_routine->Environment) > 0) {
+            return;
+        }
+        Store(*cur_routine);
+    }
+    Restore(*routine);
+}
+
 
 } // namespace Coroutine
 } // namespace Afina
