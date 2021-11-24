@@ -74,7 +74,7 @@ void Engine::sched(void *routine_) {
     if (routine_ == nullptr) {
         yield();
     }
-    if (cur_routine == routine || routine->is_block) {
+    if (cur_routine == routine || routine->is_blocked) {
         return;
     }
     if (cur_routine != idle_ctx) {
@@ -91,10 +91,10 @@ void Engine::block(void *_coro) {
     if (!coro) {
         coro = cur_routine;
     }
-    if (coro->is_block) {
+    if (coro->is_blocked) {
         return;
     }
-    coro->is_block = true;
+    coro->is_blocked = true;
     if (alive == coro) {
         alive = alive->next;
     }
@@ -123,10 +123,10 @@ void Engine::block(void *_coro) {
 
 void Engine::unblock(void *_coro) {
     context *coro = static_cast<context *>(_coro);
-    if (!coro || !coro->is_block) {
+    if (!coro || !coro->is_blocked) {
         return;
     }
-    coro->is_block = false;
+    coro->is_blocked = false;
     if (blocked == coro) {
         blocked = blocked->next;
     }

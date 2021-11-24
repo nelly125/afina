@@ -44,7 +44,7 @@ private:
         struct context *prev = nullptr;
         struct context *next = nullptr;
 
-        bool is_block = false;
+        bool is_blocked = false;
 
         ~context() = default;
 
