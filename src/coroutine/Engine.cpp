@@ -73,8 +73,9 @@ void Engine::sched(void *routine_) {
     context *routine = static_cast<context *>(routine_);
     if (routine_ == nullptr) {
         yield();
+        return;
     }
-    if (cur_routine == routine || routine->is_block) {
+    if (cur_routine == routine || routine->is_blocked) {
         return;
     }
     if (cur_routine != idle_ctx) {
