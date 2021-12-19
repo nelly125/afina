@@ -20,6 +20,8 @@
 #include <afina/Storage.h>
 #include <afina/execute/Command.h>
 #include <afina/logging/Service.h>
+#include <afina/concurrency/Executor.h>
+#include <afina/execute/Command.h>
 
 #include "protocol/Parser.h"
 
@@ -197,6 +199,8 @@ void ServerImpl::Worker(const int client_socket) {
 
 // See Server.h
 void ServerImpl::OnRun() {
+    Afina::Concurrency::Executor executor("", 2, 6, 8, 1500);
+    executor.Start();
     // Here is connection state
     // - parser: parse state of the stream
     // - command_to_execute: last command parsed out of stream
