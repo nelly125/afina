@@ -36,9 +36,8 @@ void Connection::OnClose() {
 // See Connection.h
 void Connection::DoRead() {
     std::atomic_thread_fence(std::memory_order_acquire);
-
+    int readed_bytes = -1;
     try {
-        int readed_bytes = -1;
         if ((readed_bytes = read(_socket, _client_buffer + _offset, sizeof(_client_buffer) - _offset)) > 0) {
             _logger->debug("Got {} bytes from socket", readed_bytes);
             _offset += readed_bytes;
@@ -73,12 +72,12 @@ void Connection::DoRead() {
 
                 // There is command, but we still wait for argument to arrive...
                 if (command_to_execute && arg_remains > 0) {
-                    _logger->debug("Fill argument: {} bytes of {}", readed_bytes, arg_remains);
+                    _logger->debug("Fill argument: {} bytes of {}", _offset, arg_remains);
                     // There is some parsed command, and now we are reading argument
-                    std::size_t to_read = std::min(arg_remains, std::size_t(readed_bytes));
+                    std::size_t to_read = std::min(arg_remains, std::size_t(_offset));
                     argument_for_command.append(_client_buffer, to_read);
 
-                    std::memmove(_client_buffer, _client_buffer + to_read, readed_bytes - to_read);
+                    std::memmove(_client_buffer, _client_buffer + to_read, _offset - to_read);
                     arg_remains -= to_read;
                     _offset -= to_read;
                 }
@@ -112,10 +111,9 @@ void Connection::DoRead() {
             } // while (readed_bytes)
         }
 
-        if (readed_bytes == 0) {
+        if (_offset == 0) {
             _logger->debug("Connection closed");
             _only_write = true;
-            _offset = 0;
         } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
             throw std::runtime_error(std::string(strerror(errno)));
         }
@@ -127,6 +125,7 @@ void Connection::DoRead() {
             _event.events |= EPOLLOUT;
         }
         _event.events &= ~EPOLLIN;
+
         OnClose();
     }
 
@@ -136,7 +135,7 @@ void Connection::DoRead() {
 // See Connection.h
 void Connection::DoWrite() {
     std::atomic_thread_fence(std::memory_order_acquire);
-    
+
     _logger->debug("DoWrite {} socket", _socket);
 
     const size_t size = 64;

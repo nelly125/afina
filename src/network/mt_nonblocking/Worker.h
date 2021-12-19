@@ -85,8 +85,6 @@ private:
     int _epoll_fd;
 
     ServerImpl* _server;
-
-    std::mutex _mutex;
 };
 
 } // namespace MTnonblock

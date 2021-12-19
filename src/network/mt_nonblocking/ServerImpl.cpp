@@ -123,7 +123,7 @@ void ServerImpl::Stop() {
         throw std::runtime_error("Failed to wakeup workers");
     }
     {
-        std::lock_guard<std::mutex> lock(m);
+        std::lock_guard<std::mutex> lock(_mutex);
         for (auto c: _connections) {
             shutdown(c->_socket, SHUT_RD);
         }
@@ -142,7 +142,7 @@ void ServerImpl::Join() {
     }
     _workers.clear();
     {
-        std::lock_guard<std::mutex> lock(m);
+        std::lock_guard<std::mutex> lock(_mutex);
         for (auto c: _connections) {
             close(c->_socket);
             c->OnClose();
@@ -233,7 +233,7 @@ void ServerImpl::OnRun() {
                         pc->OnError();
                         delete pc;
                     } else {
-                        std::unique_lock<std::mutex> lock(m);
+                        std::unique_lock<std::mutex> lock(_mutex);
                         _connections.emplace(pc);
                     };
                 }

@@ -44,6 +44,8 @@ protected:
     void OnNewConnection();
 
 private:
+    friend class Worker;
+
     // logger to use
     std::shared_ptr<spdlog::logger> _logger;
 
@@ -68,7 +70,7 @@ private:
     // threads serving read/write requests
     std::vector<Worker> _workers;
 
-    std::mutex m;
+    std::mutex _mutex;
 
     std::set<Connection *> _connections;
 

@@ -119,7 +119,7 @@ void Worker::OnRun() {
                     _logger->debug("epoll_ctl failed during connection rearm: error {}", epoll_ctl_retval);
                     pconn->OnError();
                     {
-                        std::unique_lock<std::mutex> lock(_mutex);
+                        std::unique_lock<std::mutex> lock(_server->_mutex);
                         _server->delete_connection(pconn);
                         close(pconn->_socket);
                         delete pconn;
@@ -132,7 +132,7 @@ void Worker::OnRun() {
                     std::cerr << "Failed to delete connection!" << std::endl;
                 }
                 {
-                    std::unique_lock<std::mutex> lock(_mutex);
+                    std::unique_lock<std::mutex> lock(_server->_mutex);
                     _server->delete_connection(pconn);
                     close(pconn->_socket);
                     delete pconn;
